@@ -1,0 +1,12 @@
+{
+  "name": "shopify-fulfilment-kpi",
+  "type": "module",
+  "version": "1.0.0",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  }
+}
