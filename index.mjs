@@ -1,32 +1,41 @@
 import fetch from "node-fetch";
 
 // ---------- CONFIG ----------
-const API_VERSION = "2025-07";
-const WINDOW_DAYS = 90;
-const NAMESPACE  = "kpi";
-const KEY        = "fulfillment_median_hours_90d";
+const API_VERSION = "2025-07";      // Shopify Admin API version
+const WINDOW_DAYS = 90;             // look back 90 days
+const NAMESPACE  = "kpi";           // metafield namespace
+const KEY        = "fulfillment_median_hours_90d"; // metafield key
 // ----------------------------
 
+// Env secrets from GitHub
 const SHOP_DOMAIN = process.env.SHOP_DOMAIN;   // e.g. rivetdirect.myshopify.com
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;   // Admin API access token
+
 if (!SHOP_DOMAIN || !ADMIN_TOKEN) {
-  console.error("Missing SHOP_DOMAIN or ADMIN_TOKEN.");
+  console.error("Missing SHOP_DOMAIN or ADMIN_TOKEN environment variables.");
   process.exit(1);
 }
+
 const API = `https://${SHOP_DOMAIN}/admin/api/${API_VERSION}/graphql.json`;
 
-const gql = async (query, variables) => {
+async function gql(query, variables) {
   const resp = await fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": ADMIN_TOKEN },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": ADMIN_TOKEN
+    },
     body: JSON.stringify({ query, variables })
   });
   const json = await resp.json();
-  if (!resp.ok || json.errors) throw new Error(`GraphQL error: ${resp.status} ${JSON.stringify(json.errors || json)}`);
+  if (!resp.ok || json.errors) {
+    throw new Error(`GraphQL error: ${resp.status} ${JSON.stringify(json.errors || json)}`);
+  }
   return json.data;
-};
+}
 
 const qShopId = `query { shop { id } }`;
+
 const qOrders = `
   query OrdersSince($first:Int!, $cursor:String, $query:String!) {
     orders(first:$first, after:$cursor, query:$query, sortKey:CREATED_AT, reverse:true) {
@@ -34,16 +43,17 @@ const qOrders = `
         cursor
         node {
           processedAt
-          fulfillments(first:10) { edges { node { createdAt } } }
+          fulfillments { createdAt }
         }
       }
       pageInfo { hasNextPage }
     }
   }
 `;
-const mSet = `
-  mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-    metafieldsSet(metafields: $metafields) {
+
+const mSetMetafields = `
+  mutation metafieldsSet($metafields:[MetafieldsSetInput!]!) {
+    metafieldsSet(metafields:$metafields) {
       metafields { namespace key type value }
       userErrors { field message }
     }
@@ -78,7 +88,7 @@ async function computeStats() {
     for (const { node } of edges) {
       ordersCount++;
       const orderAt = new Date(node.processedAt);
-      const fTimes = (node.fulfillments?.edges || []).map(e => new Date(e.node.createdAt).getTime());
+      const fTimes = (node.fulfillments || []).map(f => new Date(f.createdAt).getTime());
       if (fTimes.length) {
         const firstFul = new Date(Math.min(...fTimes));
         const hours = (firstFul - orderAt) / 36e5;
@@ -100,7 +110,7 @@ async function computeStats() {
 }
 
 async function writeMetafield(shopId, value) {
-  const res = await gql(mSet, {
+  const res = await gql(mSetMetafields, {
     metafields: [{
       ownerId: shopId,
       namespace: NAMESPACE,
