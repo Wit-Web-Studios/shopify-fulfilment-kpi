@@ -2,19 +2,22 @@ name: Update fulfilment KPI
 
 on:
   schedule:
-    - cron: "17 5 * * *"   # daily 05:17 UTC
-  workflow_dispatch:
+    - cron: "17 5 * * *"   # runs daily at 05:17 UTC
+  workflow_dispatch:       # allows manual runs
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm ci || npm i
-      - name: Run script
+
+      - name: Run KPI script
         run: node index.mjs
         env:
           SHOP_DOMAIN: ${{ secrets.SHOP_DOMAIN }}   # e.g. rivetdirect.myshopify.com
